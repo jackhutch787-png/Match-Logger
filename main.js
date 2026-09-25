@@ -55,7 +55,15 @@ async function loadSkyRendered(url){
       extraHeaders:'Accept-Language: en-GB,en;q=0.9\r\n'
     });
     // Sky's Scores & Fixtures page is client-rendered. Give its data layer time to populate.
-    await wait(1800);
+    // Wait until Sky's fixture content has rendered. The page is client-rendered,
+    // and a fixed short delay was not reliable on slower work machines.
+    const started=Date.now();
+    while(Date.now()-started<12000){
+      const ready=await win.webContents.executeJavaScript(`document.body && /Scores & Fixtures|Football Calendar/i.test(document.body.innerText||'')`,true).catch(()=>false);
+      if(ready) break;
+      await wait(500);
+    }
+    await wait(1000);
     const result=await win.webContents.executeJavaScript(`(() => ({
       html: document.documentElement.outerHTML,
       text: document.body ? document.body.innerText : '',

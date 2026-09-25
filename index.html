@@ -221,27 +221,31 @@ function dateHeadingToISO(text,year){
  if(!m)return null;const months={january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};return `${m[3]||year}-${String(months[m[2].toLowerCase()]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`
 }
 function normalizeCompetition(text){
- const t=cleanText(text).toLowerCase().replace(/sky bet\s+/,'');
- if(t.includes('premier league')&&!t.includes('women'))return 'Premier League';
- if(t==='championship')return 'Championship';
- if(t==='league one'||t==='league one scores & fixtures')return 'League One';
- if(t==='league two'||t==='league two scores & fixtures')return 'League Two';
- if(t.includes("women's super league")||t.includes('women’s super league'))return 'WSL';
+ const t=cleanText(text).toLowerCase().replace(/\s+/g,' ');
+ if(t.includes('premier league') && !t.includes('women'))return 'Premier League';
+ if(t.includes('championship') && !t.includes('scottish'))return 'Championship';
+ if(t.includes('league one') && !t.includes('scottish'))return 'League One';
+ if(t.includes('league two') && !t.includes('scottish'))return 'League Two';
+ if(t.includes("women's super league") || t.includes('women’s super league'))return 'WSL';
  if(t.includes('efl trophy'))return 'EFL Trophy';
- if(t.includes('carabao cup'))return 'Carabao Cup';
- if(t.includes('uefa europa league')&&!t.includes('conference'))return 'UEFA Europa League';
- if(t.includes('uefa europa conference league')||t==='conference league'||t.includes('europa conference league'))return 'UEFA Europa Conference League';
+ if(t.includes('carabao cup') || t.includes('efl cup'))return 'Carabao Cup';
+ if(t.includes('europa conference league') && !t.includes('women'))return 'UEFA Europa Conference League';
+ if(t.includes('europa league') && !t.includes('conference') && !t.includes('women'))return 'UEFA Europa League';
  return null;
 }
 function fixtureFromAnchor(a,comp,date){
- const raw=cleanText(a.textContent||a.getAttribute('aria-label')||'');
- if(!raw||!/\bvs\b/i.test(raw))return null;
- const m=raw.match(/(.+?)\s+vs\s+(.+?)(?:\s+Kick-off at\s+(.+?))?(?:\.|$)/i);
- if(!m)return null;
- let home=cleanText(m[1]),away=cleanText(m[2]),time=cleanText(m[3]||'');
- // Sky's accessibility text can be duplicated around the visible fixture. Prefer the final X vs Y occurrence.
+ const parent=a.closest('li,article,div') || a.parentElement || a;
+ const parentText=cleanText(parent.innerText||parent.textContent||'');
+ const raw=cleanText([parentText,a.getAttribute('aria-label'),a.getAttribute('title'),a.textContent].filter(Boolean).join(' '));
+ if(!raw)return null;
  const matches=[...raw.matchAll(/([A-Za-z0-9À-ÿ.'’&()\- ]+?)\s+vs\s+([A-Za-z0-9À-ÿ.'’&()\- ]+?)(?:\s+Kick-off at\s+([0-9.]+(?:am|pm)))?(?=\.?\s*$)/ig)];
- if(matches.length){const z=matches[matches.length-1];home=cleanText(z[1]);away=cleanText(z[2]);time=cleanText(z[3]||time)}
+ let home='',away='',time='';
+ if(matches.length){const z=matches[matches.length-1];home=cleanText(z[1]);away=cleanText(z[2]);time=cleanText(z[3]||'');}
+ if(!home){const line=raw.match(/([A-Za-z0-9À-ÿ.'’&()\- ]+?)\s+vs\s+([A-Za-z0-9À-ÿ.'’&()\- ]+?)(?:\s+Kick-off at\s+([0-9.]+(?:am|pm)))?/i);if(line){home=cleanText(line[1]);away=cleanText(line[2]);time=cleanText(line[3]||'');}}
+ if(!home){
+   const compact=cleanText([a.getAttribute('aria-label'),a.textContent].filter(Boolean).join(' ')).replace(/app\.football\.scores_fixtures\.[a-z_]+/gi,' ').replace(/\bP\b/g,' ').replace(/\bFT\b/g,' ').replace(/\b\d+\b/g,' ').replace(/\s+/g,' ').trim();
+   const parts=compact.split(/\s{2,}/).map(cleanText).filter(Boolean);if(parts.length>=2){home=parts[0];away=parts[1];}
+ }
  if(!time){const tm=raw.match(/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i);if(tm)time=tm[0]}
  home=home.replace(/^.*?(?:app\.football\.scores_fixtures\.[a-z_]+\s+)+/i,'').trim();
  away=away.replace(/\s+(?:Kick-off at.*)$/i,'').trim();
@@ -260,6 +264,10 @@ function parseSkyDailyPage(raw,date){
    if(currentDate!==date||!currentComp||el.tagName!=='A')continue;
    const f=fixtureFromAnchor(el,currentComp,date);if(!f)continue;
    const key=`${f.comp}|${f.home}|${f.away}|${f.time}`.toLowerCase();if(seen.has(key))continue;seen.add(key);f.id='sky_'+btoa(unescape(encodeURIComponent(key))).replace(/[^a-z0-9]/gi,'').slice(0,28);out.push(f);
+ }
+ if(!out.length){
+   const lines=String(doc.body?.innerText||'').split(/\n+/).map(cleanText).filter(Boolean);let cd=null,cc=null;
+   for(const line of lines){const d=dateHeadingToISO(line,year);if(d){cd=d;cc=null;continue}const c=normalizeCompetition(line);if(c){cc=c;continue}if(cd!==date||!cc)continue;const m=line.match(/^(.+?)\s+vs\s+(.+?)(?:\s+Kick-off at\s+(.+))?$/i);if(!m)continue;const home=cleanText(m[1]),away=cleanText(m[2]),time=cleanText(m[3]||'');if(!home||!away||home.length>70||away.length>70)continue;const key=`${cc}|${home}|${away}|${time}`.toLowerCase();if(seen.has(key))continue;seen.add(key);out.push({home,away,time,comp:cc,date,href:'',status:/postponed/i.test(line)?'Postponed':'',id:'sky_'+btoa(unescape(encodeURIComponent(key))).replace(/[^a-z0-9]/gi,'').slice(0,28)})}
  }
  return out;
 }
