@@ -1,19 +1,26 @@
-# LL Match Logger — Windows Desktop Build
+# LL Match Logger — Windows Desktop App v1.1
 
-This package converts the Sky Sports logger into a Windows desktop application using Electron. The renderer keeps the existing logger UI, while Sky Sports HTTP requests are made by the desktop main process rather than browser JavaScript, removing browser CORS as the fixture-fetching bottleneck.
+This version uses a hidden Chromium window inside the Electron app to load Sky Sports' client-rendered Scores & Fixtures page, then isolates exactly these nine competitions:
 
-## Build without Node on the work laptop
+- Premier League
+- Championship
+- League One
+- League Two
+- WSL
+- EFL Trophy
+- Carabao Cup
+- UEFA Europa League
+- UEFA Europa Conference League
 
-The included GitHub Actions workflow builds a portable Windows `.exe` on Microsoft's hosted Windows runner. You do not need Node on the work laptop.
+It no longer relies on browser CORS or generic public proxies for fixtures. The app loads the dated Sky Sports daily page through the desktop process, waits for Sky's page/data layer to render, then extracts only the selected date and permitted competitions.
 
-1. Create a private GitHub repository.
-2. Upload the contents of this folder.
-3. Open **Actions** → **Build Windows App** → **Run workflow**.
-4. When it finishes, open the workflow run and download the **LL-Match-Logger-Windows** artifact.
-5. Inside it is `LL-Match-Logger-1.0.0-portable.exe`.
+## Build on GitHub
 
-The app is portable: it is designed to run by double-clicking the EXE without installing Node or npm.
+1. Replace the repository's `index.html`, `main.js`, `package.json`, and `README.md` with these files.
+2. Keep `.github/workflows/build-windows.yml`.
+3. Commit the changes.
+4. Actions → Build Windows App → Run workflow.
+5. Download the `LL-Match-Logger-Windows` artifact.
+6. Extract it and run `LL-Match-Logger-1.1.0-portable.exe`.
 
-## Important network test
-
-The desktop bridge only requests `https://www.skysports.com/...`. It does not use BBC or public CORS proxies. If the Sky corporate network blocks the domain itself, the app will still be unable to retrieve Sky data; that is a network-policy issue rather than a browser CORS issue.
+No Node.js is required on the work laptop.
